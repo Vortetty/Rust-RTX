@@ -6,18 +6,18 @@ pub struct AABB {
 }
 
 impl AABB {
-    pub fn hit(&self, ray: &Ray, t_min: f64, t_max: f64) -> bool {
+    pub fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
         for i in 0..3 {
-            // let t0 = f64::min(
+            // let t0 = f32::min(
             //     (self.min.idx(i) - ray.orig.idx(i)) / ray.dir.idx(i),
             //     (self.max.idx(i) - ray.orig.idx(i)) / ray.dir.idx(i),
             // );
-            // let t1 = f64::max(
+            // let t1 = f32::max(
             //     (self.min.idx(i) - ray.orig.idx(i)) / ray.dir.idx(i),
             //     (self.max.idx(i) - ray.orig.idx(i)) / ray.dir.idx(i),
             // );
-            // let t_min = f64::max(t0, t_min);
-            // let t_max = f64::min(t1, t_max);
+            // let t_min = f32::max(t0, t_min);
+            // let t_max = f32::min(t1, t_max);
             // if t_max <= t_min {
             //     return false;
             // };

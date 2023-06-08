@@ -23,7 +23,7 @@ impl Hittable for BvhNode {
         return true;
     }
 
-    fn hit(&self, r: &crate::ray::Ray, trace_len_min: f64, trace_len_max: f64, rec: &mut crate::hittable::HitRecord) -> bool {
+    fn hit(&self, r: &crate::ray::Ray, trace_len_min: f32, trace_len_max: f32, rec: &mut crate::hittable::HitRecord) -> bool {
         if self.bound.hit(r, trace_len_min, trace_len_max) {
             return false
         };

@@ -19,7 +19,7 @@ impl Scene for RandomSpheres {
         world: &mut HittableList,
         cam: &mut Camera,
         mats: &mut MatManager,
-        aspect_ratio: &mut f64,
+        aspect_ratio: &mut f32,
         rng: &mut ChaCha20Rng,
     ) {
         //let mut world = HittableList { objs: vec![] };
@@ -60,9 +60,9 @@ impl Scene for RandomSpheres {
             for b in -11..11 {
                 let choose_mat = rand_double(rng);
                 let center = Vec3::new(
-                    a as f64 + 0.9 * rand_double(rng),
+                    a as f32 + 0.9 * rand_double(rng),
                     0.2,
-                    b as f64 + 0.9 * rand_double(rng),
+                    b as f32 + 0.9 * rand_double(rng),
                 );
 
                 if (center
@@ -127,7 +127,7 @@ impl Scene for RandomSpheres {
         //world_out.add(Box::new(BvhNode::new(&world.objs, 0, world.objs.len(), rng)));
     }
 
-    fn get_aspect_ratio(&self) -> f64 {
+    fn get_aspect_ratio(&self) -> f32 {
         return 3.0 / 2.0;
     }
 }

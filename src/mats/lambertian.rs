@@ -1,3 +1,5 @@
+use std::simd::f32x4;
+
 use crate::{
     color::Color, hittable::HitRecord, material::Material, ray::Ray, utils::random_in_hemisphere,
 };
@@ -13,7 +15,7 @@ impl Material for LambertianMat {
         &self,
         ray_in: &crate::ray::Ray,
         rec: &HitRecord,
-        attenuation: &mut crate::color::Color,
+        attenuation: &mut f32x4,
         scattered: &mut crate::ray::Ray,
         rng: &mut rand_chacha::ChaCha20Rng,
     ) -> bool {
@@ -24,7 +26,7 @@ impl Material for LambertianMat {
         }
 
         *scattered = Ray::new(rec.point, scatter_dir);
-        *attenuation = self.albedo;
+        *attenuation = self.albedo.to_simd4();
         return true;
     }
 }

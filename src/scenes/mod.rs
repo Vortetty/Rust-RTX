@@ -6,9 +6,9 @@ use rand_chacha::ChaCha20Rng;
 use crate::{camera::Camera, hittable::HittableList, mats::MatManager};
 
 pub trait Scene {
-    fn setup(&self, world: &mut HittableList, camera: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f64, rng: &mut ChaCha20Rng);
+    fn setup(&self, world: &mut HittableList, camera: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f32, rng: &mut ChaCha20Rng);
 
-    fn get_aspect_ratio(&self) -> f64 {
+    fn get_aspect_ratio(&self) -> f32 {
         return 16.0 / 9.0;
     }
 }

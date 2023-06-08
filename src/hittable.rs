@@ -8,11 +8,11 @@ use crate::{ray::Ray, vec3::Vec3, aabb::AABB};
 pub struct HitRecord {
     pub point: Vec3,
     pub normal: Vec3,
-    pub trace_len: f64,
+    pub trace_len: f32,
     pub front_face: bool,
     pub material: i64,
-    pub tex_u: f64,
-    pub tex_v: f64
+    pub tex_u: f32,
+    pub tex_v: f32
 }
 
 impl HitRecord {
@@ -47,7 +47,7 @@ impl HitRecord {
 }
 
 pub trait Hittable {
-    fn hit(&self, r: &Ray, trace_len_min: f64, trace_len_max: f64, rec: &mut HitRecord) -> bool;
+    fn hit(&self, r: &Ray, trace_len_min: f32, trace_len_max: f32, rec: &mut HitRecord) -> bool;
     fn bounds(&self, output_box: &mut AABB) -> bool;
 }
 
@@ -60,7 +60,7 @@ unsafe impl Sync for HittableList {}
 
 struct HitTestResult {
     pub hit_anything: bool,
-    pub closest_so_far: f64,
+    pub closest_so_far: f32,
     pub tmp_rec: HitRecord
 }
 
@@ -68,8 +68,8 @@ impl HittableList {
     pub fn hit(
         &self,
         ray: &Ray,
-        trace_len_min: f64,
-        trace_len_max: f64,
+        trace_len_min: f32,
+        trace_len_max: f32,
         rec: &mut HitRecord,
     ) -> bool {
         let mut hit_anything = false;
@@ -116,14 +116,14 @@ impl HittableList {
     fn surrounding_box(&self, b1: &AABB, b2: &AABB) -> AABB {
         return AABB {
             min: Vec3::new(
-                f64::min(b1.min.x, b2.min.x),
-                f64::min(b1.min.y, b2.min.y),
-                f64::min(b1.min.z, b2.min.z)
+                f32::min(b1.min.x, b2.min.x),
+                f32::min(b1.min.y, b2.min.y),
+                f32::min(b1.min.z, b2.min.z)
             ),
             max: Vec3::new(
-                f64::max(b1.max.x, b2.max.x),
-                f64::max(b1.max.y, b2.max.y),
-                f64::max(b1.max.z, b2.max.z)
+                f32::max(b1.max.x, b2.max.x),
+                f32::max(b1.max.y, b2.max.y),
+                f32::max(b1.max.z, b2.max.z)
             )
         }
     }

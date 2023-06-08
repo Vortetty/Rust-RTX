@@ -6,7 +6,7 @@ use crate::{camera::Camera, hittable::HittableList, mats::{MatManager, lambertia
 pub struct DofSpheresGlass {}
 
 impl Scene for DofSpheresGlass {
-    fn setup(&self, world: &mut HittableList, cam: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f64, rng: &mut ChaCha20Rng) {
+    fn setup(&self, world: &mut HittableList, cam: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f32, rng: &mut ChaCha20Rng) {
         let ground_mat: i64 = mats.gen_mat(Box::new(LambertianMat {
             albedo: Color {
                 r: 86.0 / 255.0,

@@ -1,3 +1,5 @@
+use std::simd::f32x4;
+
 use crate::{
     color::Color, hittable::HitRecord, material::Material, ray::Ray, utils::random_in_hemisphere,
 };
@@ -13,7 +15,7 @@ impl Material for DiffuseLight {
         &self,
         ray_in: &crate::ray::Ray,
         rec: &HitRecord,
-        attenuation: &mut crate::color::Color,
+        attenuation: &mut f32x4,
         scattered: &mut crate::ray::Ray,
         rng: &mut rand_chacha::ChaCha20Rng,
     ) -> bool {
@@ -21,7 +23,7 @@ impl Material for DiffuseLight {
     }
 
     #[allow(unused_variables)]
-    fn emitted(&self, u: f64, v: f64, p: &crate::vec3::Vec3) -> Color {
-        return self.emit;
+    fn emitted(&self, u: f32, v: f32, p: &crate::vec3::Vec3) -> f32x4 {
+        return self.emit.to_simd4();
     }
 }

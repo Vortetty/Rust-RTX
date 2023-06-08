@@ -1,3 +1,5 @@
+use std::simd::f32x4;
+
 use crate::{
     color::Color, hittable::HitRecord, material::Material, ray::Ray, utils::random_in_hemisphere,
 };
@@ -11,7 +13,7 @@ impl Material for DebugFrontMat {
         &self,
         ray_in: &crate::ray::Ray,
         rec: &HitRecord,
-        attenuation: &mut crate::color::Color,
+        attenuation: &mut f32x4,
         scattered: &mut crate::ray::Ray,
         rng: &mut rand_chacha::ChaCha20Rng,
     ) -> bool {
@@ -23,9 +25,9 @@ impl Material for DebugFrontMat {
 
         *scattered = Ray::new(rec.point, scatter_dir);
         *attenuation = if rec.front_face {
-            Color::new_01_range(1.0, 0.0, 0.0)
+            Color::new_01_range(1.0, 0.0, 0.0).to_simd4()
         } else {
-            Color::new_01_range(0.0, 1.0, 0.0)
+            Color::new_01_range(0.0, 1.0, 0.0).to_simd4()
         };
         return true;
     }

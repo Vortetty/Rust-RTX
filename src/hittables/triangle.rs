@@ -1,4 +1,4 @@
-use std::f64::EPSILON;
+use std::f32::EPSILON;
 use crate::{vec3::Vec3, hittable::Hittable, hittable::HitRecord, ray::Ray};
 
 #[derive(Clone, Copy)]
@@ -10,7 +10,7 @@ pub struct Triangle {
 }
 
 impl Hittable for Triangle {
-    fn hit(&self, r: &Ray, trace_len_min: f64, trace_len_max: f64, rec: &mut HitRecord) -> bool { // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+    fn hit(&self, r: &Ray, trace_len_min: f32, trace_len_max: f32, rec: &mut HitRecord) -> bool { // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
         //let edge1 = self.v1 - self.v0;
         //let edge2 = self.v2 - self.v0;
         //let h = r.dir.cross_prod(edge2);
@@ -69,7 +69,7 @@ impl Hittable for Triangle {
         let v0v2 = self.v2 - self.v0;
         let pvec = r.dir.cross_prod(v0v2);
         let det = v0v1.dot_prod(pvec);
-        if det < f64::EPSILON {
+        if det < f32::EPSILON {
                 return false;
         };
         let idet = 1.0/det;

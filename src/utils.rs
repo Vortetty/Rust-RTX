@@ -1,10 +1,10 @@
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
 use rand_chacha::ChaCha20Rng;
 use crate::{vec3::Vec3, rand_double::rand_double_range};
 
 #[allow(dead_code)]
-pub fn deg_to_rad(deg: f64) -> f64 {
+pub fn deg_to_rad(deg: f32) -> f32 {
     return deg * PI / 180.0;
 }
 
@@ -42,8 +42,8 @@ pub fn reflect(v: &Vec3, n: &Vec3) -> Vec3 {
     return (*v) - 2.0*v.dot_prod(n.clone())*(*n);
 }
 
-pub fn refract(uv: &Vec3, normal: &Vec3, etai_over_etat: f64) -> Vec3 {
-    let cos_theta = f64::min((-*uv).dot_prod(*normal), 1.0);
+pub fn refract(uv: &Vec3, normal: &Vec3, etai_over_etat: f32) -> Vec3 {
+    let cos_theta = f32::min((-*uv).dot_prod(*normal), 1.0);
     let r_out_perp = etai_over_etat * (*uv + cos_theta*(*normal));
     let r_out_parallel = (-((1.0-r_out_perp.length_squared()).abs().sqrt())) * (*normal);
     return r_out_perp + r_out_parallel;

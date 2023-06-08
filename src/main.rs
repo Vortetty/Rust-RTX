@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 mod camera;
 mod color;
 mod hittable;
@@ -12,11 +13,11 @@ mod vec3;
 mod aabb;
 
 use std::{
-    f64::INFINITY,
+    f32::INFINITY,
     fmt::Write,
     sync::{Arc, RwLock},
     thread,
-    time::Duration,
+    time::{Duration, Instant}, ops, simd::{f32x4, self, StdFloat},
 };
 
 use camera::Camera;
@@ -29,7 +30,7 @@ use pad::PadStr;
 use rand::prelude::*;
 use rand::{thread_rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use rand_double::rand_double;
+use rand_double::{rand_double, rand_double_range};
 use ray::Ray;
 use rayon::{
     current_thread_index,
@@ -44,8 +45,8 @@ use crate::scenes::{dof_spheres_glass::DofSpheresGlass, random_spheres::RandomSp
 
 use jemallocator::Jemalloc;
 
-#[global_allocator]
-static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+//#[global_allocator]
+//static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn ray_color(
     ray: &Ray,
@@ -53,7 +54,7 @@ fn ray_color(
     rng: &mut ChaCha20Rng,
     mats: &MatManager,
     depth: u64,
-) -> Color {
+) -> f32x4 {
     let mut rec: HitRecord = HitRecord::default();
 
     if depth <= 0 {
@@ -61,7 +62,7 @@ fn ray_color(
             r: 0.0,
             g: 0.0,
             b: 0.0,
-        };
+        }.to_simd4();
     }
 
     if world.hit(ray, 0.000000001, INFINITY, &mut rec) {
@@ -69,7 +70,7 @@ fn ray_color(
         //let tmp_ray = Ray::new(rec.point, target - rec.point);
         //let next_color = ray_color(&tmp_ray, world, rng, depth - 1);
         let mut scattered = Ray::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0));
-        let mut attenuation = Color::new(0.0, 0.0, 0.0);
+        let mut attenuation = Color::new(0.0, 0.0, 0.0).to_simd4();
         let mat = mats.get_mat(&rec.material);
         let emitted = mat.emitted(0.0, 0.0, &Vec3::new(0.0, 0.0, 0.0));
 
@@ -81,11 +82,7 @@ fn ray_color(
             rng,
         ) {
             let next_color = ray_color(&scattered, world, rng, mats, depth - 1);
-            return Color {
-                r: emitted.r + attenuation.r * next_color.r,
-                g: emitted.g + attenuation.g * next_color.g,
-                b: emitted.b + attenuation.b * next_color.b,
-            };
+            return emitted + attenuation * next_color;
         } else {
             return emitted;
         }
@@ -112,7 +109,17 @@ fn ray_color(
         r: (1.0 - t) + 0.5 * t,
         g: (1.0 - t) + 0.7 * t,
         b: (1.0 - t) + t,
-    };
+    }.to_simd4();
+}
+
+fn format_bar(bar: &ProgressBar) {
+    bar.set_style(
+        ProgressStyle::with_template("{msg} | {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {percent}% ({eta_precise} @ {per_sec_nice} lines/s)").unwrap()
+        .progress_chars("#>-")
+        .with_key("per_sec_nice", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.3}", state.per_sec()).unwrap())
+    );
+    bar.tick();
+    bar.enable_steady_tick(Duration::from_millis(50));
 }
 
 #[allow(unused_must_use)]
@@ -124,30 +131,21 @@ fn main() {
     thread_rng().fill(&mut seed);
 
     let scene = RandomSpheres {};
-    let aspect_ratio: f64 = scene.get_aspect_ratio();
-    let target_width: u32 = 1920/8;
-    let target_height: u32 = (target_width as f64 / aspect_ratio) as u32;
-    let samples_per_pixel: u16 = 500;
+    let aspect_ratio: f32 = scene.get_aspect_ratio();
+    let target_width: u32 = 1920;
+    let target_height: u32 = (target_width as f32 / aspect_ratio) as u32;
+    let samples_per_pixel: u16 = 100;
     let max_depth: u16 = 50;
     let mprog = Arc::new(MultiProgress::new());
     let bar = Arc::new(mprog.add(ProgressBar::new(target_height as u64)));
-    bar.set_style(
-        ProgressStyle::with_template("{msg} | {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {percent}% ({eta_precise} @ {per_sec_nice} lines/s)").unwrap()
-        .progress_chars("#>-")
-        .with_key("per_sec_nice", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.3}", state.per_sec()).unwrap())
-    );
-    bar.tick();
-    bar.set_message(format!("Total").pad_to_width_with_alignment(
-        format!("Thread {}", num_cpus::get()).len(),
-        pad::Alignment::Left,
-    ));
-    bar.enable_steady_tick(Duration::from_millis(50));
+    format_bar(&bar);
+    bar.set_message("Render Lines");
 
     let mut rng = ChaCha20Rng::from_seed(seed);
     let mut mats = MatManager::new();
     let mut world = HittableList { objs: vec![] };
     let mut cam = Camera::default(&mut rng);
-    let mut aspect_ratio: f64 = 0.0;
+    let mut aspect_ratio: f32 = 0.0;
     #[allow(unused_mut)]
     scene.setup(&mut world, &mut cam, &mut mats, &mut aspect_ratio, &mut rng);
 
@@ -155,6 +153,8 @@ fn main() {
     let mut sworld = Arc::new(world);
     let mut scam = Arc::new(cam);
 
+
+    let start = Instant::now();
     let mut rets = (0..target_height)
         .into_par_iter()
         .map(capture_it::capture!(
@@ -181,15 +181,27 @@ fn main() {
             )
         ))
         .collect::<Vec<RtRet>>();
+    let run_finished = start.elapsed();
 
+    let bar1 = mprog.add(ProgressBar::new(target_height as u64));
+    format_bar(&bar1);
+    bar1.set_message("Merge Lines");
     let mut im_raw: Vec<u8> = vec![];
     rets.sort_by_key(|x| x.i_id);
     for mut retv in rets {
         im_raw.append(&mut retv.im);
+        bar1.inc(1);
     }
+    let line_concat_finish = start.elapsed();
 
+    let im_raw_len = im_raw.len();
+    let expected = target_width * target_height * 3;
+    println!("{im_raw_len}, {expected}, {target_width}, {target_height}");
     let im = RgbImage::from_raw(target_width, target_height, im_raw).unwrap();
     im.save("output.png");
+    let save_finish = start.elapsed();
+
+    println!()
 }
 
 struct RtRet {
@@ -216,7 +228,7 @@ fn raytrace(
     //let mut mats = MatManager::new();
     //let mut world = HittableList { objs: vec![] };
     //let mut cam = Camera::default(&mut rng);
-    //let mut aspect_ratio: f64 = 0.0;
+    //let mut aspect_ratio: f32 = 0.0;
     //#[allow(unused_mut)]
     //scene.setup(&mut world, &mut cam, &mut mats, &mut aspect_ratio, &mut rng);
     //let y_iter = split_vec_into_n_groups_and_get_n((0 as u32..target_height as u32).collect::<Vec<u32>>(), num_cpus::get(), thread_num);
@@ -234,27 +246,20 @@ fn raytrace(
     // ------------------
     //  RT Without the X
     // ------------------
+    let scale = 1.0 / samples_per_pixel as f32;
     for x in 0..target_width {
         let mut pix_color = Color {
             r: 0.0,
             g: 0.0,
             b: 0.0,
-        };
-        let t_pix_color = Arc::new(RwLock::new(&mut pix_color));
+        }.to_simd4();
         for _sample in 0..samples_per_pixel {
-            let u = (x as f64 + rand_double(&mut rng)) / (target_width - 1) as f64;
-            let v = 1.0 - ((y as f64 + rand_double(&mut rng)) / (target_height - 1) as f64);
+            let u = (x as f32 + rand_double(&mut rng)) / (target_width - 1) as f32;
+            let v = 1.0 - ((y as f32 + rand_double(&mut rng)) / (target_height - 1) as f32);
             let r = cam.get_ray(u, v, &mut rng);
             let c = ray_color(&r, &world, &mut rng, &mats, max_depth as u64);
-
-            let tmp = Color {
-                r: c.r + t_pix_color.read().unwrap().r,
-                g: c.g + t_pix_color.read().unwrap().g,
-                b: c.b + t_pix_color.read().unwrap().b,
-            };
-            **t_pix_color.write().unwrap() = tmp;
+            pix_color += c;
         }
-        let scale = 1.0 / samples_per_pixel as f64;
         //im.put_pixel(
         //    x,
         //    0,
@@ -264,16 +269,23 @@ fn raytrace(
         //        ((pix_color.b * scale).sqrt() * 255.0) as u8,
         //    ]),
         //);
-        im.push(((pix_color.r * scale).sqrt() * 255.0) as u8);
-        im.push(((pix_color.g * scale).sqrt() * 255.0) as u8);
-        im.push(((pix_color.b * scale).sqrt() * 255.0) as u8);
+
+        //im.push(((pix_color.r * scale).sqrt() * 255.0) as u8);
+        //im.push(((pix_color.g * scale).sqrt() * 255.0) as u8);
+        //im.push(((pix_color.b * scale).sqrt() * 255.0) as u8);
+        pix_color *= f32x4::from_array([scale, scale, scale, 0.0]);
+        pix_color = pix_color.sqrt() * f32x4::from_array([255.0, 255.0, 255.0, 0.0]);
+        im.append(pix_color.to_array()[0..3].to_vec().as_mut());
+        //im.push(pix_color[0] as u8);
+        //im.push(pix_color[1] as u8);
+        //im.push(pix_color[2] as u8);
     }
     bar.inc(1);
 
     //let mut raw_out = im.into_raw();
     //raw_out.shrink_to_fit();
     return RtRet {
-        im: im, //.into_raw(),
+        im: im.iter().map(|&e| e as u8).collect(),
         i_id: y,
     };
 }

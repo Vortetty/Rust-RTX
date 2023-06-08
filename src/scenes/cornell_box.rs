@@ -6,7 +6,7 @@ use crate::{camera::Camera, hittable::HittableList, mats::{MatManager, lambertia
 pub struct CornellBox {}
 
 impl Scene for CornellBox {
-    fn setup(&self, world: &mut HittableList, cam: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f64, rng: &mut ChaCha20Rng) {
+    fn setup(&self, world: &mut HittableList, cam: &mut Camera, mats: &mut MatManager, aspect_ratio: &mut f32, rng: &mut ChaCha20Rng) {
         let front_debug_mat = mats.gen_mat(Box::new(DebugFrontMat{}));
         let black_lambert = mats.gen_mat(Box::new(LambertianMat{albedo:Color::new(0.0, 0.0, 0.0)}));
 
@@ -60,7 +60,7 @@ impl Scene for CornellBox {
         );
     }
 
-    fn get_aspect_ratio(&self) -> f64 {
+    fn get_aspect_ratio(&self) -> f32 {
         return 1.0;
     }
 }

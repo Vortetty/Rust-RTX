@@ -1,3 +1,5 @@
+use std::simd::f32x4;
+
 use crate::{
     color::Color,
     hittable::HitRecord,
@@ -8,7 +10,7 @@ use crate::{
 
 #[derive(Clone, Copy)]
 pub struct DielectricMat {
-    pub refract_index: f64,
+    pub refract_index: f32,
 }
 
 impl Material for DielectricMat {
@@ -17,19 +19,19 @@ impl Material for DielectricMat {
         &self,
         ray_in: &crate::ray::Ray,
         rec: &HitRecord,
-        attenuation: &mut crate::color::Color,
+        attenuation: &mut f32x4,
         scattered: &mut crate::ray::Ray,
         rng: &mut rand_chacha::ChaCha20Rng,
     ) -> bool {
-        *attenuation = Color::new_01_range(1.0, 1.0, 1.0);
-        let refraction_ratio: f64 = if rec.front_face {
+        *attenuation = Color::new_01_range(1.0, 1.0, 1.0).to_simd4();
+        let refraction_ratio: f32 = if rec.front_face {
             1.0/self.refract_index
         } else {
             self.refract_index
         };
 
         let unit_dir = ray_in.dir.unit_vector();
-        let cos_theta = f64::min((-unit_dir).dot_prod(rec.normal), 1.0);
+        let cos_theta = f32::min((-unit_dir).dot_prod(rec.normal), 1.0);
         let sin_theta = (1.0 - cos_theta*cos_theta).sqrt();
 
         let cannot_refract = refraction_ratio * sin_theta > 1.0;
@@ -47,7 +49,7 @@ impl Material for DielectricMat {
 }
 
 impl DielectricMat {
-    fn reflectance(&self, cosine: f64, ref_idx: f64) -> f64 {
+    fn reflectance(&self, cosine: f32, ref_idx: f32) -> f32 {
         let mut r0 = (1.0-ref_idx) / (1.0+ref_idx);
         r0 *= r0;
         return r0 + (1.0-r0)*(1.0-cosine).powf(5.0);

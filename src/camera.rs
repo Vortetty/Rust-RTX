@@ -11,7 +11,7 @@ pub struct Camera {
     pub u: Vec3,
     pub v: Vec3,
     pub w: Vec3,
-    pub lens_radius: f64
+    pub lens_radius: f32
 }
 
 impl Camera {
@@ -19,17 +19,17 @@ impl Camera {
         look_from: Vec3,
         look_to: Vec3,
         view_up: Vec3,
-        vert_fov: f64,
-        aspect_ratio: f64,
-        aperture: f64,
-        focus_dist: f64,
+        vert_fov: f32,
+        aspect_ratio: f32,
+        aperture: f32,
+        focus_dist: f32,
         rng: &mut ChaCha20Rng
     ) -> Camera {
         let theta = deg_to_rad(vert_fov);
         let h = (theta / 2.0).tan();
-        //let aspect_ratio: f64 = 16.0 / 9.0;
-        let viewport_height: f64 = 2.0 * h;
-        let viewport_width: f64 = aspect_ratio * viewport_height;
+        //let aspect_ratio: f32 = 16.0 / 9.0;
+        let viewport_height: f32 = 2.0 * h;
+        let viewport_width: f32 = aspect_ratio * viewport_height;
 
         let w = (look_from - look_to).unit_vector();
         let u = view_up.cross_prod(w).unit_vector();
@@ -52,7 +52,7 @@ impl Camera {
         };
     }
 
-    pub fn get_ray(&self, s: f64, t: f64, rng: &mut ChaCha20Rng) -> Ray {
+    pub fn get_ray(&self, s: f32, t: f32, rng: &mut ChaCha20Rng) -> Ray {
         let rd = self.lens_radius * random_in_unit_disk(rng);
         let offset = self.u * rd.x + self.v * rd.y;
 
