@@ -1,4 +1,5 @@
 #![feature(portable_simd)]
+mod aabb;
 mod camera;
 mod color;
 mod hittable;
@@ -10,19 +11,22 @@ mod ray;
 mod scenes;
 mod utils;
 mod vec3;
-mod aabb;
 
 use std::{
     f32::INFINITY,
     fmt::Write,
+    ops,
+    simd::{self, f32x4, StdFloat},
     sync::{Arc, RwLock},
     thread,
-    time::{Duration, Instant}, ops, simd::{f32x4, self, StdFloat},
+    time::{Duration, Instant},
 };
 
+use atomic_counter::{AtomicCounter, RelaxedCounter};
 use camera::Camera;
 use color::Color;
 use hittable::{HitRecord, HittableList};
+use humantime::format_duration;
 use image::{Rgb, RgbImage};
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use mats::MatManager;
@@ -37,7 +41,7 @@ use rayon::{
     prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSlice,
 };
-use scenes::cornell_box::{CornellBox, self};
+use scenes::cornell_box::{self, CornellBox};
 use vec3::Vec3;
 
 #[allow(unused_imports)]
@@ -62,7 +66,8 @@ fn ray_color(
             r: 0.0,
             g: 0.0,
             b: 0.0,
-        }.to_simd4();
+        }
+        .to_simd4();
     }
 
     if world.hit(ray, 0.000000001, INFINITY, &mut rec) {
@@ -74,13 +79,7 @@ fn ray_color(
         let mat = mats.get_mat(&rec.material);
         let emitted = mat.emitted(0.0, 0.0, &Vec3::new(0.0, 0.0, 0.0));
 
-        if mat.scatter(
-            ray,
-            &rec,
-            &mut attenuation,
-            &mut scattered,
-            rng,
-        ) {
+        if mat.scatter(ray, &rec, &mut attenuation, &mut scattered, rng) {
             let next_color = ray_color(&scattered, world, rng, mats, depth - 1);
             return emitted + attenuation * next_color;
         } else {
@@ -109,7 +108,8 @@ fn ray_color(
         r: (1.0 - t) + 0.5 * t,
         g: (1.0 - t) + 0.7 * t,
         b: (1.0 - t) + t,
-    }.to_simd4();
+    }
+    .to_simd4();
 }
 
 fn format_bar(bar: &ProgressBar) {
@@ -153,9 +153,10 @@ fn main() {
     let mut sworld = Arc::new(world);
     let mut scam = Arc::new(cam);
 
+    let counter = RelaxedCounter::new(0);
 
     let start = Instant::now();
-    let mut rets = (0..target_height)
+    let mut rets = (0..num_cpus::get()) //target_height)
         .into_par_iter()
         .map(capture_it::capture!(
             [
@@ -166,21 +167,26 @@ fn main() {
                 &bar,
                 &smats,
                 &sworld,
-                &scam
+                &scam,
+                &counter
             ],
             move |line| raytrace(
                 target_width,
                 target_height,
                 samples_per_pixel,
                 max_depth,
-                line,
+                counter,
                 bar,
                 smats,
                 sworld,
                 scam
             )
         ))
-        .collect::<Vec<RtRet>>();
+        .collect::<Vec<Vec<RtRet>>>()
+        .join(&RtRet {
+            im: vec![],
+            i_id: usize::MAX,
+        });
     let run_finished = start.elapsed();
 
     let bar1 = mprog.add(ProgressBar::new(target_height as u64));
@@ -196,17 +202,26 @@ fn main() {
 
     let im_raw_len = im_raw.len();
     let expected = target_width * target_height * 3;
-    println!("{im_raw_len}, {expected}, {target_width}, {target_height}");
     let im = RgbImage::from_raw(target_width, target_height, im_raw).unwrap();
     im.save("output.png");
     let save_finish = start.elapsed();
 
-    println!()
+    let runtime = format_duration(run_finished);
+    let mergetime = format_duration(line_concat_finish - run_finished);
+    let savetime = format_duration(save_finish - line_concat_finish);
+    let totaltime = format_duration(save_finish);
+
+    println!("Rendering took   {runtime}");
+    println!("Merge lines took {mergetime}");
+    println!("Saving took      {savetime}");
+    println!("Total time taken {totaltime}");
+    println!("File saved as    output.png");
 }
 
+#[derive(Clone)]
 struct RtRet {
     im: Vec<u8>,
-    i_id: u32,
+    i_id: usize,
 }
 
 fn raytrace(
@@ -214,12 +229,12 @@ fn raytrace(
     target_height: u32,
     samples_per_pixel: u16,
     max_depth: u16,
-    y: u32,
+    y_counter: &RelaxedCounter,
     bar: &Arc<ProgressBar>,
     mats: &MatManager,
     world: &HittableList,
-    cam: &Camera
-) -> RtRet {
+    cam: &Camera,
+) -> Vec<RtRet> {
     //let mut rng = ChaCha20Rng::from_seed(seed);
 
     // ----------------
@@ -237,55 +252,70 @@ fn raytrace(
     thread_rng().fill(&mut seed1);
     let mut rng = ChaCha20Rng::from_seed(seed1);
 
-    // ---------------
-    //  Output Buffer
-    // ---------------
-    //let mut im = RgbImage::new(target_width, /*target_height*/ 1);
-    let mut im = vec![];
+    let mut ims = vec![];
 
-    // ------------------
-    //  RT Without the X
-    // ------------------
-    let scale = 1.0 / samples_per_pixel as f32;
-    for x in 0..target_width {
-        let mut pix_color = Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        }.to_simd4();
-        for _sample in 0..samples_per_pixel {
-            let u = (x as f32 + rand_double(&mut rng)) / (target_width - 1) as f32;
-            let v = 1.0 - ((y as f32 + rand_double(&mut rng)) / (target_height - 1) as f32);
-            let r = cam.get_ray(u, v, &mut rng);
-            let c = ray_color(&r, &world, &mut rng, &mats, max_depth as u64);
-            pix_color += c;
+    loop {
+        // -------
+        //  Y val
+        // -------
+        let y = y_counter.inc() as u32;
+        if y >= target_height {
+            break;
         }
-        //im.put_pixel(
-        //    x,
-        //    0,
-        //    Rgb([
-        //        ((pix_color.r * scale).sqrt() * 255.0) as u8,
-        //        ((pix_color.g * scale).sqrt() * 255.0) as u8,
-        //        ((pix_color.b * scale).sqrt() * 255.0) as u8,
-        //    ]),
-        //);
 
-        //im.push(((pix_color.r * scale).sqrt() * 255.0) as u8);
-        //im.push(((pix_color.g * scale).sqrt() * 255.0) as u8);
-        //im.push(((pix_color.b * scale).sqrt() * 255.0) as u8);
-        pix_color *= f32x4::from_array([scale, scale, scale, 0.0]);
-        pix_color = pix_color.sqrt() * f32x4::from_array([255.0, 255.0, 255.0, 0.0]);
-        im.append(pix_color.to_array()[0..3].to_vec().as_mut());
-        //im.push(pix_color[0] as u8);
-        //im.push(pix_color[1] as u8);
-        //im.push(pix_color[2] as u8);
+        // ---------------
+        //  Output Buffer
+        // ---------------
+        //let mut im = RgbImage::new(target_width, /*target_height*/ 1);
+        let mut im = vec![];
+
+        // ------------------
+        //  RT Without the X
+        // ------------------
+        let scale = 1.0 / samples_per_pixel as f32;
+        for x in 0..target_width {
+            let mut pix_color = Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+            }
+            .to_simd4();
+            for _sample in 0..samples_per_pixel {
+                let u = (x as f32 + rand_double(&mut rng)) / (target_width - 1) as f32;
+                let v = 1.0 - ((y as f32 + rand_double(&mut rng)) / (target_height - 1) as f32);
+                let r = cam.get_ray(u, v, &mut rng);
+                let c = ray_color(&r, &world, &mut rng, &mats, max_depth as u64);
+                pix_color += c;
+            }
+            //im.put_pixel(
+            //    x,
+            //    0,
+            //    Rgb([
+            //        ((pix_color.r * scale).sqrt() * 255.0) as u8,
+            //        ((pix_color.g * scale).sqrt() * 255.0) as u8,
+            //        ((pix_color.b * scale).sqrt() * 255.0) as u8,
+            //    ]),
+            //);
+
+            //im.push(((pix_color.r * scale).sqrt() * 255.0) as u8);
+            //im.push(((pix_color.g * scale).sqrt() * 255.0) as u8);
+            //im.push(((pix_color.b * scale).sqrt() * 255.0) as u8);
+            pix_color *= f32x4::from_array([scale, scale, scale, 0.0]);
+            pix_color = pix_color.sqrt() * f32x4::from_array([255.0, 255.0, 255.0, 0.0]);
+            im.append(pix_color.to_array()[0..3].to_vec().as_mut());
+            //im.push(pix_color[0] as u8);
+            //im.push(pix_color[1] as u8);
+            //im.push(pix_color[2] as u8);
+        }
+        bar.inc(1);
+
+        ims.push(RtRet {
+            im: im.iter().map(|&e| e as u8).collect(),
+            i_id: y as usize,
+        });
     }
-    bar.inc(1);
 
     //let mut raw_out = im.into_raw();
     //raw_out.shrink_to_fit();
-    return RtRet {
-        im: im.iter().map(|&e| e as u8).collect(),
-        i_id: y,
-    };
+    return ims;
 }
