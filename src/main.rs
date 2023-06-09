@@ -49,8 +49,8 @@ use crate::scenes::{dof_spheres_glass::DofSpheresGlass, random_spheres::RandomSp
 
 use jemallocator::Jemalloc;
 
-//#[global_allocator]
-//static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn ray_color(
     ray: &Ray,
