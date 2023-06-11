@@ -43,11 +43,10 @@ use rayon::{
 };
 use scenes::cornell_box::{self, CornellBox};
 use vec3::Vec3;
+use thread_priority::*;
 
 #[allow(unused_imports)]
 use crate::scenes::{dof_spheres_glass::DofSpheresGlass, random_spheres::RandomSpheres, Scene};
-
-use jemallocator::Jemalloc;
 
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -179,7 +178,8 @@ fn main() {
                 bar,
                 smats,
                 sworld,
-                scam
+                scam,
+                line
             )
         ))
         .collect::<Vec<Vec<RtRet>>>()
@@ -234,7 +234,11 @@ fn raytrace(
     mats: &MatManager,
     world: &HittableList,
     cam: &Camera,
+    threadid: usize
 ) -> Vec<RtRet> {
+    ThreadPriority::Max.set_for_current().ok();
+    let priority = std::thread::current().get_priority().unwrap().to_posix(ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Other)).unwrap();
+    println!("Thread {threadid} priority {priority}");
     //let mut rng = ChaCha20Rng::from_seed(seed);
 
     // ----------------
